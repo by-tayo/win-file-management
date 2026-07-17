@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>File Explorer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f3f3f3;
+    --white: #ffffff;
+    --ribbon-bg: #f0f0f0;
+    --ribbon-border: #d1d1d1;
+    --nav-bg: #fafafa;
+    --nav-hover: #e5f3ff;
+    --nav-active: #cce8ff;
+    --nav-active-border: #99cfff;
+    --list-hover: #e5f3ff;
+    --list-sel: #cce8ff;
+    --list-sel-border: #99cfff;
+    --text: #1a1a1a;
+    --muted: #666;
+    --border: #d1d1d1;
+    --accent: #0067c0;
+    --btn-hover: #e5f3ff;
+    --btn-active: #cce8ff;
+    --status-bg: #f0f0f0;
+    --dup-warn: #fff4ce;
+    --dup-warn-border: #f0d060;
+    --danger: #c42b1c;
+    --segoe: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  }
+  body {
+    font-family: var(--segoe);
+    font-size: 12px;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* Title Bar */
+  .title-bar {
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    padding: 0 8px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+  }
+  .title-text { font-size: 12px; flex: 1; }
+  .title-btns { display: flex; margin-left: auto; }
+  .title-btn {
+    width: 46px; height: 32px;
+    background: none; border: none; font-size: 12px;
+    color: var(--muted); cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .title-btn:hover { background: #e5e5e5; }
+  .title-btn.close:hover { background: var(--danger); color: #fff; }
+
+  /* Ribbon */
+  .ribbon {
+    background: var(--ribbon-bg);
+    border-bottom: 1px solid var(--ribbon-border);
+    flex-shrink: 0;
+  }
+  .ribbon-tabs {
+    display: flex;
+    padding: 0 8px;
+    border-bottom: 1px solid var(--ribbon-border);
+  }
+  .ribbon-tab {
+    padding: 5px 14px;
+    font-size: 12px;
+    font-family: var(--segoe);
+    color: var(--muted);
+    background: none; border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+    transition: all 0.1s;
+  }
+  .ribbon-tab:hover { color: var(--text); background: var(--btn-hover); }
+  .ribbon-tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--white); }
+
+  .ribbon-bar {
+    display: flex;
+    align-items: stretch;
+    padding: 3px 8px;
+    gap: 2px;
+    min-height: 60px;
+  }
+  .rgroup {
+    display: flex;
+    flex-direction: column;
+    padding: 0 8px;
+    border-right: 1px solid var(--ribbon-border);
+  }
+  .rgroup:last-child { border-right: none; flex: 1; }
+  .rgroup-inner { display: flex; gap: 2px; flex: 1; align-items: center; }
+  .rgroup-label { font-size: 10px; color: var(--muted); text-align: center; padding: 1px 0; }
+
+  .rbtn {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 4px 10px;
+    background: none; border: 1px solid transparent; border-radius: 3px;
+    cursor: pointer; font-family: var(--segoe); font-size: 11px;
+    color: var(--text); min-width: 46px; transition: all 0.1s; white-space: nowrap;
+  }
+  .rbtn:hover { background: var(--btn-hover); border-color: var(--nav-active-border); }
+  .rbtn.danger:hover { background: #fde7e9; border-color: #f4b9b2; color: var(--danger); }
+  .rbtn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .rbtn .ri { font-size: 20px; line-height: 1; }
+  .rbtn-sm { flex-direction: row; min-width: unset; padding: 4px 8px; }
+  .rbtn-sm .ri { font-size: 14px; }
+
+  /* Nav + Address bar */
+  .nav-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 8px;
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .nav-arrow {
+    width: 26px; height: 26px;
+    background: none; border: 1px solid transparent; border-radius: 3px;
+    cursor: pointer; font-size: 12px; color: var(--muted);
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.1s;
+  }
+  .nav-arrow:hover { background: var(--btn-hover); border-color: var(--nav-active-border); }
+  .nav-arrow:disabled { opacity: 0.35; cursor: default; pointer-events: none; }
+  .address-bar {
+    flex: 1; display: flex; align-items: center;
+    background: var(--white);
+    border: 1px solid var(--border); border-radius: 3px;
+    padding: 0 8px; height: 26px; gap: 5px; cursor: text;
+    transition: border-color 0.15s;
+  }
+  .address-bar:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .breadcrumbs { display: flex; align-items: center; flex: 1; overflow: hidden; }
+  .crumb {
+    padding: 2px 5px; border-radius: 2px; cursor: pointer; font-size: 12px; white-space: nowrap;
+  }
+  .crumb:hover { background: var(--btn-hover); }
+  .crumb-sep { color: var(--muted); font-size: 11px; padding: 0 1px; }
+  .search-box {
+    display: flex; align-items: center;
+    background: var(--white);
+    border: 1px solid var(--border); border-radius: 3px;
+    padding: 0 8px; height: 26px; gap: 5px; width: 200px;
+    transition: border-color 0.15s;
+  }
+  .search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .search-box input, .address-bar input {
+    flex: 1; border: none; outline: none; background: transparent;
+    font-family: var(--segoe); font-size: 12px; color: var(--text);
+  }
+
+  /* Main layout */
+  .explorer-body { flex: 1; display: flex; overflow: hidden; background: var(--white); }
+
+  /* Nav pane */
+  .nav-pane {
+    width: 220px; flex-shrink: 0;
+    background: var(--nav-bg);
+    border-right: 1px solid var(--border);
+    overflow-y: auto; padding: 4px 0;
+  }
+  .nav-sec-label { font-size: 11px; font-weight: 600; color: var(--muted); padding: 8px 12px 3px; }
+  .nav-item {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 12px; font-size: 12px; cursor: pointer;
+    border: 1px solid transparent; border-radius: 3px; margin: 0 4px;
+    transition: all 0.08s; white-space: nowrap;
+  }
+  .nav-item:hover { background: var(--nav-hover); border-color: var(--nav-active-border); }
+  .nav-item.active { background: var(--nav-active); border-color: var(--nav-active-border); }
+  .nav-icon { font-size: 14px; flex-shrink: 0; }
+  .nav-sep { height: 1px; background: var(--border); margin: 5px 8px; }
+
+  /* Content pane */
+  .content-pane { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Column header */
+  .col-header {
+    display: grid;
+    grid-template-columns: 36px 1fr 90px 150px 100px;
+    background: var(--ribbon-bg);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .col-cell {
+    padding: 5px 8px; font-size: 12px; color: var(--muted);
+    border-right: 1px solid var(--border);
+    cursor: pointer; display: flex; align-items: center; gap: 3px;
+    user-select: none; white-space: nowrap;
+  }
+  .col-cell:last-child { border-right: none; }
+  .col-cell:hover { background: var(--list-hover); }
+  .col-cell.sorted { color: var(--accent); }
+
+  /* File list */
+  .file-list { flex: 1; overflow-y: auto; }
+  .file-row {
+    display: grid;
+    grid-template-columns: 36px 1fr 90px 150px 100px;
+    align-items: center;
+    border-bottom: 1px solid transparent;
+    cursor: default;
+    transition: background 0.05s;
+  }
+  .file-row:hover { background: var(--list-hover); border-bottom-color: var(--list-sel-border); }
+  .file-row.selected { background: var(--list-sel); border-bottom-color: var(--list-sel-border); }
+  .fcell { padding: 5px 8px; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fcell-check { display: flex; align-items: center; justify-content: center; }
+  .fcell-name { display: flex; align-items: center; gap: 5px; }
+  .ficon { font-size: 16px; flex-shrink: 0; }
+  .fname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fcell-meta { color: var(--muted); }
+
+  /* Duplicates */
+  .dup-panel { padding: 10px 14px; overflow-y: auto; flex: 1; }
+  .dup-summary {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--dup-warn); border: 1px solid var(--dup-warn-border);
+    border-radius: 3px; padding: 10px 14px; margin-bottom: 10px;
+    font-size: 12px;
+  }
+  .ds-title { font-weight: 600; font-size: 13px; }
+  .ds-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .dup-group { border: 1px solid var(--border); border-radius: 3px; margin-bottom: 8px; overflow: hidden; }
+  .dup-group-hdr {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--ribbon-bg); border-bottom: 1px solid var(--border);
+    padding: 6px 10px; font-size: 12px; cursor: pointer;
+  }
+  .dup-group-hdr:hover { background: var(--list-hover); }
+  .dup-badge { background: var(--dup-warn); border: 1px solid var(--dup-warn-border); padding: 1px 7px; border-radius: 2px; font-size: 11px; }
+  .dup-waste { color: var(--danger); font-size: 11px; margin-left: auto; }
+  .dup-col-hdr {
+    display: grid; grid-template-columns: 28px 1fr 80px 1fr 70px;
+    background: var(--ribbon-bg); padding: 3px 10px;
+    font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border);
+  }
+  .dup-file-row {
+    display: grid; grid-template-columns: 28px 1fr 80px 1fr 70px;
+    align-items: center; padding: 5px 10px;
+    border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .dup-file-row:last-child { border-bottom: none; }
+  .dup-file-row:hover { background: var(--list-hover); }
+  .dup-fname { display: flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dup-dir { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .keep-tag { font-size: 10px; background: #dff0d8; border: 1px solid #bcd5ac; padding: 1px 6px; border-radius: 2px; color: #3a7534; white-space: nowrap; }
+
+  /* Status bar */
+  .status-bar {
+    display: flex; align-items: center; gap: 14px;
+    padding: 3px 14px;
+    background: var(--status-bg); border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--muted); flex-shrink: 0;
+  }
+  .ssep { width: 1px; height: 12px; background: var(--border); }
+
+  /* Empty/loading */
+  .state-center {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    height: 100%; gap: 10px; color: var(--muted);
+  }
+  .state-icon { font-size: 48px; opacity: 0.35; }
+  .state-title { font-size: 14px; color: var(--text); }
+  .state-sub { font-size: 12px; text-align: center; max-width: 300px; line-height: 1.5; }
+  .spinner { width: 24px; height: 24px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 9999; align-items: center; justify-content: center; }
+  .modal-overlay.visible { display: flex; }
+  .modal-win { background: var(--white); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 8px 32px rgba(0,0,0,0.2); width: 420px; max-width: 96vw; overflow: hidden; }
+  .modal-hdr { display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; }
+  .modal-body { padding: 12px 16px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+  .modal-body ul { margin: 8px 0 0 14px; max-height: 110px; overflow-y: auto; }
+  .modal-body li { list-style: disc; color: var(--text); font-size: 11px; margin-bottom: 2px; }
+  .modal-ftr { display: flex; justify-content: flex-end; gap: 8px; padding: 10px 16px; border-top: 1px solid var(--border); }
+  .wbtn { padding: 5px 20px; font-family: var(--segoe); font-size: 12px; border: 1px solid var(--border); border-radius: 3px; background: var(--ribbon-bg); cursor: pointer; color: var(--text); transition: all 0.1s; }
+  .wbtn:hover { background: var(--btn-hover); border-color: var(--accent); }
+  .wbtn.danger { background: var(--danger); color: white; border-color: var(--danger); }
+  .wbtn.danger:hover { background: #a82316; }
+
+  /* Toast */
+  #toasts { position: fixed; bottom: 28px; right: 16px; display: flex; flex-direction: column; gap: 6px; z-index: 99999; }
+  .toast-w { background: var(--white); border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); padding: 10px 14px; font-size: 12px; display: flex; align-items: center; gap: 8px; min-width: 220px; animation: tIn 0.18s ease; }
+  @keyframes tIn { from { opacity:0; transform:translateY(6px); } }
+  .toast-w.success { border-left: 3px solid #3a7534; }
+  .toast-w.error { border-left: 3px solid var(--danger); }
+
+  .cloud-badge { font-size: 11px; flex-shrink: 0; cursor: default; }
+
+  input[type="checkbox"] { accent-color: var(--accent); cursor: pointer; width: 13px; height: 13px; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #c4c4c4; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #aaa; }
+</style>
+</head>
+<body>
+
+<!-- Title Bar -->
+<div class="title-bar">
+  <span style="font-size:15px">📁</span>
+  <span class="title-text" id="titleText">File Explorer</span>
+  <div class="title-btns">
+    <button class="title-btn">—</button>
+    <button class="title-btn">□</button>
+    <button class="title-btn close">✕</button>
+  </div>
+</div>
+
+<!-- Ribbon -->
+<div class="ribbon">
+  <div class="ribbon-tabs">
+    <button class="ribbon-tab active" onclick="setTab('home',this)">Home</button>
+    <button class="ribbon-tab" onclick="setTab('view',this)">View</button>
+    <button class="ribbon-tab" onclick="setTab('duplicates',this)">Duplicates</button>
+  </div>
+
+  <div class="ribbon-bar" id="rb-home">
+    <div class="rgroup">
+      <div class="rgroup-inner">
+        <button class="rbtn" id="btnUp" onclick="navigateUp()" disabled><span class="ri">⬆️</span>Up</button>
+        <button class="rbtn" onclick="refresh()"><span class="ri">🔄</span>Refresh</button>
+      </div>
+      <div class="rgroup-label">Navigate</div>
+    </div>
+    <div class="rgroup">
+      <div class="rgroup-inner">
+        <button class="rbtn danger" id="btnDelete" onclick="confirmDelete()" disabled><span class="ri">🗑️</span>Delete</button>
+        <button class="rbtn" onclick="selectAll()"><span class="ri">☑️</span>Select All</button>
+        <button class="rbtn" onclick="clearSel()"><span class="ri">☐</span>Deselect</button>
+      </div>
+      <div class="rgroup-label">Organize</div>
+    </div>
+    <div class="rgroup">
+      <div class="rgroup-inner">
+        <button class="rbtn" onclick="launchDupScan()"><span class="ri">🔍</span>Find Dupes</button>
+      </div>
+      <div class="rgroup-label">Tools</div>
+    </div>
+    <div class="rgroup">
+      <div class="rgroup-inner" style="justify-content:flex-end">
+        <span id="ribSel" style="font-size:11px;color:var(--muted)"></span>
+      </div>
+      <div class="rgroup-label"></div>
+    </div>
+  </div>
+
+  <div class="ribbon-bar" id="rb-view" style="display:none">
+    <div class="rgroup">
+      <div class="rgroup-inner">
+        <button class="rbtn rbtn-sm" onclick="setSort('name')"><span class="ri">🔤</span>Name</button>
+        <button class="rbtn rbtn-sm" onclick="setSort('size')"><span class="ri">📏</span>Size</button>
+        <button class="rbtn rbtn-sm" onclick="setSort('modified')"><span class="ri">📅</span>Date</button>
+        <button class="rbtn rbtn-sm" onclick="setSort('extension')"><span class="ri">📂</span>Type</button>
+      </div>
+      <div class="rgroup-label">Sort by</div>
+    </div>
+  </div>
+
+  <div class="ribbon-bar" id="rb-duplicates" style="display:none">
+    <div class="rgroup">
+      <div class="rgroup-inner">
+      <button class="rbtn danger" onclick="deleteAllDups()"><span class="ri">🗑️</span>Delete All Dupes</button>
+      </div>
+      <div class="rgroup-label">Actions</div>
+    </div>
+  </div>
+</div>
+
+<!-- Address + Search -->
+<div class="nav-bar">
+  <button class="nav-arrow" id="btnBack" onclick="goBack()" disabled>◀</button>
+  <button class="nav-arrow" id="btnFwd" onclick="goFwd()" disabled>▶</button>
+  <button class="nav-arrow" id="btnUpNav" onclick="navigateUp()" disabled>▲</button>
+  <div class="address-bar">
+    <span style="font-size:14px">📂</span>
+    <div class="breadcrumbs" id="breadcrumbs">
+      <span style="color:var(--muted)">This PC</span>
+    </div>
+  </div>
+  <div class="search-box">
+    <span style="color:var(--muted);font-size:13px">🔍</span>
+    <input type="text" id="searchInput" placeholder="Search Home" onkeydown="if(event.key==='Enter') doSearch()">
+  </div>
+</div>
+
+
+<!-- Body -->
+<div class="explorer-body">
+
+  <!-- Nav pane -->
+  <nav class="nav-pane">
+    <div class="nav-sec-label">Quick access</div>
+    <div id="quickAccess"></div>
+    <div class="nav-sep"></div>
+    <div class="nav-sec-label">This PC</div>
+    <div id="thisPC"></div>
+  </nav>
+
+  <!-- Content -->
+  <div class="content-pane">
+
+    <!-- Explorer -->
+    <div id="vExplorer" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+      <div class="col-header" id="colHeader" style="display:none">
+        <div class="col-cell"><input type="checkbox" id="chkAll" onchange="toggleAll(this)"></div>
+        <div class="col-cell sorted" id="ch-name" onclick="setSort('name')">Name <span id="si-name">↑</span></div>
+        <div class="col-cell" id="ch-size" onclick="setSort('size')">Size <span id="si-size"></span></div>
+        <div class="col-cell" id="ch-modified" onclick="setSort('modified')">Date modified <span id="si-modified"></span></div>
+        <div class="col-cell" id="ch-extension" onclick="setSort('extension')">Type <span id="si-extension"></span></div>
+      </div>
+      <div class="file-list" id="fileList">
+        <div class="state-center">
+          <div class="state-icon">💻</div>
+          <div class="state-title">This PC</div>
+          <div class="state-sub">Select a location from the left pane to browse files.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Duplicates -->
+    <div id="vDuplicates" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--ribbon-bg);border-bottom:1px solid var(--border);flex-shrink:0">
+        <span style="font-size:12px;color:var(--muted)">Scan path:</span>
+        <input type="text" id="dupPath" placeholder="Enter a folder path to scan for duplicates…"
+          style="flex:1;padding:4px 8px;border:1px solid var(--border);border-radius:3px;font-family:var(--segoe);font-size:12px"
+          onkeydown="if(event.key==='Enter') runDupScan()">
+        <button class="wbtn" style="background:var(--accent);color:#fff;border-color:var(--accent)" onclick="runDupScan()">Scan for Duplicates</button>
+      </div>
+      <div id="dupContent" class="dup-panel">
+        <div class="state-center">
+          <div class="state-icon">🔍</div>
+          <div class="state-title">No scan results</div>
+          <div class="state-sub">Enter a folder path above and click Scan. The tool will hash file contents to find exact copies.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Search results -->
+    <div id="vSearch" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div class="col-header">
+        <div class="col-cell"><input type="checkbox" onchange="selAllSearch(this)"></div>
+        <div class="col-cell">Name</div>
+        <div class="col-cell">Size</div>
+        <div class="col-cell">Location</div>
+        <div class="col-cell">Type</div>
+      </div>
+      <div class="file-list" id="searchList"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Status bar -->
+<div class="status-bar">
+  <span id="stItems">Select a folder to begin</span>
+  <div class="ssep" id="stSep" style="display:none"></div>
+  <span id="stSel"></span>
+  <div class="ssep" id="stPathSep" style="display:none"></div>
+  <span id="stPath" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:400px"></span>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-win">
+    <div class="modal-hdr"><span id="mIcon">⚠️</span><span id="mTitle">Delete Files</span></div>
+    <div class="modal-body" id="mBody"></div>
+    <div class="modal-ftr">
+      <button class="wbtn" onclick="closeModal()">Cancel</button>
+      <button class="wbtn danger" onclick="execDelete()">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div id="toasts"></div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────────
+let curPath = null, entries = [], sel = new Set(), searchSel = new Set();
+let pendingDel = [], hist = [], histIdx = -1;
+let sortKey = 'name', sortAsc = true;
+let activeView = 'explorer';
+
+// ── Init ───────────────────────────────────────────────────────────────
+(async () => {
+  const { roots } = await (await fetch('/api/roots')).json();
+  const qaEl = document.getElementById('quickAccess');
+  const pcEl = document.getElementById('thisPC');
+  const qaMap = { Home:'🏠', '/tmp':'⚡', OneDrive:'☁️', Desktop:'🖥️', Documents:'📄', Downloads:'⬇️', Pictures:'🖼️' };
+  roots.forEach((r, i) => {
+    const icon = qaMap[r.label] || (r.label.includes('Drive') ? '💾' : '📁');
+    const html = `<div class="nav-item" onclick="browse('${e(jsstr(r.path))}')" id="ni${i}">
+      <span class="nav-icon">${icon}</span>${e(r.label)}</div>`;
+    if (i < 3) qaEl.innerHTML += html;
+    pcEl.innerHTML += html;
+  });
+})();
+
+// ── Ribbon tabs ────────────────────────────────────────────────────────
+function setTab(tab, el) {
+  ['home','view','duplicates'].forEach(t => {
+    document.getElementById('rb-'+t).style.display = t===tab?'flex':'none';
+  });
+  document.querySelectorAll('.ribbon-tab').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  if (tab === 'duplicates') {
+    showView('duplicates');
+    if (curPath) document.getElementById('dupPath').value = curPath;
+  } else if (activeView === 'duplicates') showView('explorer');
+}
+
+function showView(v) {
+  activeView = v;
+  document.getElementById('vExplorer').style.display = v==='explorer'?'flex':'none';
+  document.getElementById('vDuplicates').style.display = v==='duplicates'?'flex':'none';
+  document.getElementById('vSearch').style.display = v==='search'?'flex':'none';
+}
+
+// ── Browse ─────────────────────────────────────────────────────────────
+async function browse(path, push=true) {
+  if (!path) return;
+  document.getElementById('fileList').innerHTML = '<div class="state-center"><div class="spinner"></div></div>';
+  document.getElementById('colHeader').style.display = 'none';
+  sel.clear(); selUI();
+  showView('explorer');
+
+  try {
+    const res = await fetch('/api/browse?path='+encodeURIComponent(path));
+    if (!res.ok) throw new Error((await res.json()).detail);
+    const data = await res.json();
+    curPath = data.path; entries = data.entries;
+
+    if (push) { hist = hist.slice(0,histIdx+1); hist.push(data.path); histIdx=hist.length-1; }
+    updateAddr(data.path);
+    document.getElementById('titleText').textContent = data.path.replace(/\\/g,'/').split('/').filter(Boolean).pop() || data.path;
+    document.getElementById('btnUp').disabled = !data.parent;
+    document.getElementById('btnUpNav').disabled = !data.parent;
+    document.getElementById('btnBack').disabled = histIdx<=0;
+    document.getElementById('btnFwd').disabled = histIdx>=hist.length-1;
+    document.getElementById('colHeader').style.display = 'grid';
+    document.getElementById('stPath').textContent = data.path;
+    document.getElementById('stPathSep').style.display = '';
+    document.getElementById('stItems').textContent = data.item_count+' items';
+    // highlight nav
+    document.querySelectorAll('.nav-item').forEach(ni => ni.classList.remove('active'));
+    renderList();
+  } catch(ex) {
+    document.getElementById('fileList').innerHTML = `<div class="state-center"><div class="state-icon">⚠️</div><div class="state-title">Cannot open folder</div><div class="state-sub">${e(ex.message)}</div></div>`;
+    toast(ex.message,'error');
+  }
+}
+
+function updateAddr(path) {
+  const parts = path.replace(/\\/g,'/').split('/').filter(Boolean);
+  let html='', built = path.startsWith('/')?'/':'';
+  parts.forEach((p,i) => {
+    built += (i===0&&!path.startsWith('/')?'':'/')+p;
+    if (i>0||path.startsWith('/')) html += `<span class="crumb-sep">›</span>`;
+    html += `<span class="crumb" onclick="browse('${e(built)}')">${e(p)}</span>`;
+  });
+  document.getElementById('breadcrumbs').innerHTML = html || '<span style="color:var(--muted)">This PC</span>';
+}
+
+function navigateUp() {
+  if (!curPath) return;
+  const p = curPath.replace(/\\/g,'/').replace(/\/$/,'').split('/');
+  if (p.length<=1) return;
+  p.pop(); browse(p.join('/')||'/');
+}
+function goBack() { if(histIdx>0){ histIdx--; browse(hist[histIdx],false); } }
+function goFwd()  { if(histIdx<hist.length-1){ histIdx++; browse(hist[histIdx],false); } }
+function refresh(){ if(curPath) browse(curPath,false); }
+
+// ── Render ─────────────────────────────────────────────────────────────
+function renderList() {
+  const filter = document.getElementById('searchInput').value.toLowerCase();
+  let rows = filter ? entries.filter(r=>r.name.toLowerCase().includes(filter)) : entries;
+  rows = [...rows].sort((a,b) => {
+    if (a.is_dir!==b.is_dir) return b.is_dir-a.is_dir;
+    let va=a[sortKey],vb=b[sortKey];
+    if (typeof va==='string'){va=va.toLowerCase();vb=vb.toLowerCase();}
+    return sortAsc?(va<vb?-1:va>vb?1:0):(va>vb?-1:va<vb?1:0);
+  });
+  updateSortUI();
+
+  const fl = document.getElementById('fileList');
+  if (!rows.length) { fl.innerHTML='<div class="state-center"><div class="state-icon">📭</div><div class="state-title">This folder is empty</div></div>'; return; }
+
+  fl.innerHTML = rows.map(r => {
+    const chk = sel.has(r.path)?'checked':'';
+    const date = new Date(r.modified*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const type = r.is_dir?'File folder':(r.extension?r.extension.replace('.','').toUpperCase()+' file':'File');
+    return `<div class="file-row ${r.is_dir?'':'file-r'} ${sel.has(r.path)?'selected':''}"
+      onclick="rowClick(event,'${e(jsstr(r.path))}',${r.is_dir})"
+      ondblclick="${r.is_dir?`browse('${e(jsstr(r.path))}')`:''}"
+    >
+      <div class="fcell fcell-check"><input type="checkbox" ${chk} onclick="event.stopPropagation()" onchange="chkFile('${e(jsstr(r.path))}',this)"></div>
+      <div class="fcell fcell-name"><span class="ficon">${fIcon(r)}</span><span class="fname">${e(r.name)}</span>${cloudBadge(r.cloud_status)}</div>
+      <div class="fcell fcell-meta">${r.is_dir?'':r.size_human}</div>
+      <div class="fcell fcell-meta">${date}</div>
+      <div class="fcell fcell-meta">${type}</div>
+    </div>`;
+  }).join('');
+}
+
+function cloudBadge(status) {
+  if (status === 'cloud_only') return `<span class="cloud-badge" title="Online only — not downloaded to this device">☁️</span>`;
+  if (status === 'always_available') return `<span class="cloud-badge" title="Always available on this device">✅</span>`;
+  return '';
+}
+
+function fIcon(r) {
+  if (r.is_dir) return '📁';
+  const m={'.py':'🐍','.js':'📜','.ts':'📜','.html':'🌐','.css':'🎨','.json':'📋','.md':'📝','.txt':'📄',
+    '.pdf':'📕','.png':'🖼️','.jpg':'🖼️','.jpeg':'🖼️','.gif':'🖼️','.mp4':'🎬','.mp3':'🎵','.wav':'🎵',
+    '.zip':'📦','.tar':'📦','.gz':'📦','.exe':'⚙️','.sh':'💻','.bat':'💻','.ps1':'💻',
+    '.sql':'🗄️','.csv':'📊','.xlsx':'📊','.env':'🔑','.pem':'🔑'};
+  return m[r.extension]||'📄';
+}
+
+function updateSortUI() {
+  ['name','size','modified','extension'].forEach(k => {
+    const ch = document.getElementById('ch-'+k);
+    const si = document.getElementById('si-'+k);
+    if (ch) ch.classList.toggle('sorted', sortKey===k);
+    if (si) si.textContent = sortKey===k?(sortAsc?'↑':'↓'):'';
+  });
+}
+function setSort(k) { sortKey===k?sortAsc=!sortAsc:(sortKey=k,sortAsc=true); renderList(); }
+
+// ── Selection ───────────────────────────────────────────────────────────
+function rowClick(ev, path, isDir) {
+  if (isDir||ev.target.tagName==='INPUT') return;
+  sel.has(path)?sel.delete(path):sel.add(path);
+  selUI(); renderList();
+}
+function chkFile(path, cb) { cb.checked?sel.add(path):sel.delete(path); selUI(); cb.closest('.file-row')?.classList.toggle('selected',cb.checked); }
+function selectAll()  { entries.filter(e=>!e.is_dir).forEach(e=>sel.add(e.path)); selUI(); renderList(); }
+function clearSel()   { sel.clear(); selUI(); if(entries.length) renderList(); }
+function toggleAll(cb){ cb.checked?selectAll():clearSel(); }
+function selUI() {
+  const n=sel.size;
+  document.getElementById('btnDelete').disabled=n===0;
+  document.getElementById('stSel').textContent=n?`${n} item(s) selected`:'';
+  document.getElementById('stSep').style.display=n?'':'none';
+  document.getElementById('ribSel').textContent=n?`${n} selected`:'';
+}
+
+// ── Search ──────────────────────────────────────────────────────────────
+async function doSearch() {
+  const q=document.getElementById('searchInput').value.trim();
+  if (!q||!curPath) return;
+  showView('search');
+  document.getElementById('searchList').innerHTML='<div class="state-center"><div class="spinner"></div></div>';
+  searchSel.clear();
+  try {
+    const res=await fetch(`/api/search?path=${encodeURIComponent(curPath)}&query=${encodeURIComponent(q)}`);
+    if(!res.ok) throw new Error((await res.json()).detail);
+    const data=await res.json();
+    renderSearch(data);
+  } catch(ex){toast(ex.message,'error');}
+}
+
+function renderSearch(data) {
+  const sl=document.getElementById('searchList');
+  if(!data.results.length){sl.innerHTML=`<div class="state-center"><div class="state-icon">🔍</div><div class="state-title">No results for "${e(data.query)}"</div></div>`;return;}
+  sl.innerHTML=data.results.map(f=>{
+    const date=new Date(f.modified*1000).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    const type=f.extension?f.extension.replace('.','').toUpperCase()+' file':'File';
+    return `<div class="file-row ${searchSel.has(f.path)?'selected':''}" onclick="srClick('${e(jsstr(f.path))}',this)">
+      <div class="fcell fcell-check"><input type="checkbox" ${searchSel.has(f.path)?'checked':''} onclick="event.stopPropagation()" onchange="srChk('${e(jsstr(f.path))}',this)"></div>
+      <div class="fcell fcell-name"><span class="ficon">${fIcon({extension:f.extension,is_dir:false})}</span><span class="fname">${e(f.name)}</span>${cloudBadge(f.cloud_status)}</div>
+      <div class="fcell fcell-meta">${f.size_human}</div>
+      <div class="fcell fcell-meta" title="${e(f.dir)}" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${e(f.dir)}</div>
+      <div class="fcell fcell-meta">${type}</div>
+    </div>`;
+  }).join('');
+}
+function srClick(path,row){searchSel.has(path)?searchSel.delete(path):searchSel.add(path);row.classList.toggle('selected',searchSel.has(path));row.querySelector('input').checked=searchSel.has(path);}
+function srChk(path,cb){cb.checked?searchSel.add(path):searchSel.delete(path);cb.closest('.file-row')?.classList.toggle('selected',cb.checked);}
+function selAllSearch(cb){document.querySelectorAll('#searchList input[type=checkbox]').forEach(c=>{c.checked=cb.checked;const m=c.getAttribute('onchange')?.match(/'([^']+)'/)?.[1];if(m){cb.checked?searchSel.add(m):searchSel.delete(m);c.closest('.file-row')?.classList.toggle('selected',cb.checked);}});}
+
+// ── Duplicates ──────────────────────────────────────────────────────────
+function launchDupScan(){
+  if(curPath) document.getElementById('dupPath').value=curPath;
+  const tab=document.querySelectorAll('.ribbon-tab')[2];
+  setTab('duplicates',tab); tab.classList.add('active');
+  runDupScan();
+}
+
+async function runDupScan(){
+  const path=document.getElementById('dupPath').value.trim();
+  if(!path){toast('Enter a folder path','error');return;}
+  document.getElementById('dupContent').innerHTML='<div class="state-center"><div class="spinner"></div><div class="state-sub" style="margin-top:8px">Hashing files and comparing… please wait.</div></div>';
+  try{
+    const res=await fetch('/api/duplicates?path='+encodeURIComponent(path));
+    if(!res.ok) throw new Error((await res.json()).detail);
+    renderDups(await res.json());
+  }catch(ex){
+    document.getElementById('dupContent').innerHTML=`<div class="state-center"><div class="state-icon">⚠️</div><div class="state-title">Error</div><div class="state-sub">${e(ex.message)}</div></div>`;
+    toast(ex.message,'error');
+  }
+}
+
+function renderDups(data){
+  const c=document.getElementById('dupContent');
+  const cloudNote = data.cloud_skipped_count
+    ? `<div class="dup-summary" style="background:#eef6ff;border-color:#a9d3f7">
+        <span style="font-size:18px">☁️</span>
+        <div style="flex:1">
+          <div class="ds-sub">${data.cloud_skipped_count} OneDrive online-only file(s) (${e(data.cloud_skipped_size_human)}) were skipped — downloading them first would be needed to check for duplicates.</div>
+        </div>
+      </div>`
+    : '';
+
+  if(!data.groups.length){c.innerHTML=cloudNote+`<div class="state-center"><div class="state-icon">✅</div><div class="state-title">No duplicates found</div><div class="state-sub">All files in <strong>${e(data.scan_path)}</strong> are unique.</div></div>`;return;}
+
+  let html=cloudNote+`<div class="dup-summary">
+    <span style="font-size:22px">⚠️</span>
+    <div style="flex:1">
+      <div class="ds-title">${data.duplicate_groups} group(s) of duplicate files</div>
+      <div class="ds-sub">Recoverable space: <strong style="color:var(--danger)">${e(data.wasted_space_human)}</strong> — check boxes next to copies you want to remove</div>
+    </div>
+  </div>`;
+
+  data.groups.forEach(g=>{
+    html+=`<div class="dup-group">
+      <div class="dup-group-hdr" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+        <span class="dup-badge">${g.count} copies</span>
+        <span style="color:var(--muted)">&nbsp;${g.size_human} each</span>
+        <span class="dup-waste">−${g.wasted_human} wasted</span>
+        <span style="color:var(--muted);font-size:10px;margin-left:8px">▼</span>
+      </div>
+      <div>
+        <div class="dup-col-hdr"><div></div><div>Name</div><div>Size</div><div>Location</div><div></div></div>`;
+    g.files.forEach((f,i)=>{
+      const keep=i===0;
+      html+=`<div class="dup-file-row">
+        <div>${keep?'':`<input type="checkbox" checked data-dup="${e(f.path)}">`}</div>
+        <div class="dup-fname"><span class="ficon">${fIcon({extension:'.'+f.name.split('.').pop(),is_dir:false})}</span>${e(f.name)}${cloudBadge(f.cloud_status)}</div>
+        <div style="color:var(--muted);font-size:11px">${g.size_human}</div>
+        <div class="dup-dir">${e(f.dir)}</div>
+        <div>${keep?'<span class="keep-tag">keep</span>':''}</div>
+      </div>`;
+    });
+    html+=`</div></div>`;
+  });
+  c.innerHTML=html;
+}
+
+function deleteCheckedDups(){
+  const cbs=[...document.querySelectorAll('[data-dup]:checked')];
+  if(!cbs.length){toast('No duplicates checked','error');return;}
+  pendingDel=cbs.map(c=>c.getAttribute('data-dup'));
+  showModal('Delete Duplicate Files',`<p>Permanently delete <strong>${pendingDel.length}</strong> duplicate file(s)? This cannot be undone.</p><ul>${pendingDel.slice(0,10).map(p=>`<li>${e(p)}</li>`).join('')}${pendingDel.length>10?`<li>…and ${pendingDel.length-10} more</li>`:''}</ul>`);
+}
+function deleteAllDups(){
+  const all=[...document.querySelectorAll('[data-dup]')];
+  if(!all.length){toast('No duplicates found','error');return;}
+  pendingDel=all.map(c=>c.getAttribute('data-dup'));
+  showModal('Delete All Duplicate Copies',`<p>Delete <strong>${pendingDel.length}</strong> duplicate files? Only the first copy of each group is kept.</p>`);
+}
+
+// ── Delete ──────────────────────────────────────────────────────────────
+function confirmDelete(){
+  if(!sel.size) return;
+  pendingDel=[...sel];
+  showModal('Delete Files',`<p>Permanently delete <strong>${pendingDel.length}</strong> item(s)? This action cannot be undone.</p><ul>${pendingDel.slice(0,8).map(p=>`<li>${e(p)}</li>`).join('')}${pendingDel.length>8?`<li>…and ${pendingDel.length-8} more</li>`:''}</ul>`);
+}
+async function execDelete(){
+  closeModal();
+  if(!pendingDel.length) return;
+  try{
+    const r=await fetch('/api/delete',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({paths:pendingDel})});
+    const d=await r.json();
+    if(d.deleted) toast(`Deleted ${d.deleted} item(s)`,'success');
+    if(d.failed) toast(`Failed: ${d.failed} item(s)`,'error');
+  }catch(ex){toast(ex.message,'error');}
+  pendingDel=[]; sel.clear(); searchSel.clear(); selUI();
+  if(activeView==='explorer'&&curPath) browse(curPath,false);
+  if(activeView==='duplicates') runDupScan();
+  if(activeView==='search') doSearch();
+}
+
+// ── Modal / Toast ───────────────────────────────────────────────────────
+function showModal(title,body){document.getElementById('mTitle').textContent=title;document.getElementById('mBody').innerHTML=body;document.getElementById('modal').classList.add('visible');}
+function closeModal(){document.getElementById('modal').classList.remove('visible');}
+function toast(msg,type='info'){const icons={success:'✅',error:'❌',info:'ℹ️'};const el=document.createElement('div');el.className=`toast-w ${type}`;el.innerHTML=`<span>${icons[type]}</span><span>${e(msg)}</span>`;document.getElementById('toasts').appendChild(el);setTimeout(()=>el.remove(),3500);}
+
+// ── Escape ──────────────────────────────────────────────────────────────
+function e(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// Escapes a value for safe embedding inside a single-quoted JS string literal
+// written into an inline HTML attribute (e.g. onclick="fn('${e(jsstr(path))}')").
+// Windows paths contain backslashes, which JS would otherwise interpret as
+// escape sequences (e.g. "\tayli" -> TAB + "ayli").
+function jsstr(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
+</script>
+</body>
+</html>
