@@ -1,6 +1,31 @@
 # 🗄 FileVault — Local File Manager
 
-A FastAPI-powered file management dashboard with a dark terminal-style UI.
+
+
+
+
+
+A FastAPI-powered file management dashboard with UI.
+
+
+<img width="3830" height="1960" alt="Screenshot 2026-07-18 130007" src="https://github.com/user-attachments/assets/1da3824d-b66a-4429-a2e4-ee96f44a3423" />
+
+
+---
+
+
+<img width="3837" height="1980" alt="Screenshot 2026-07-18 130151" src="https://github.com/user-attachments/assets/c0378255-eadc-44ea-87ef-8394c4f378f9" />
+
+---
+
+
+<img width="3837" height="1970" alt="Screenshot 2026-07-18 130248" src="https://github.com/user-attachments/assets/e5a3de47-35da-4184-a9aa-8bb8dd48bdae" />
+
+---
+
+<img width="3837" height="1985" alt="windows ui 2" src="https://github.com/user-attachments/assets/4601a01e-4632-4136-a567-0de78161d7fc" />
+
+---
 
 ## Features
 
@@ -22,7 +47,7 @@ pip install -r requirements.txt
 python main.py
 
 # 3. Open in browser
-http://localhost:8000
+localhost
 ```
 
 ## How It Works
